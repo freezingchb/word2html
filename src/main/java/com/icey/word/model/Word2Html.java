@@ -29,17 +29,17 @@ import org.w3c.dom.Document;
 public class Word2Html {
 
     @Autowired
-    private AliOSS aliOSS;
+    private Image image;
 
     public String docx(MultipartFile file, String tempPath) throws Throwable {
         // 定义图片保存目录
-        tempPath += "/" + this.createUniqueStr();
+        tempPath += "/" + image.createUniqueStr();
 
         // 生成 XWPFDocument
         InputStream inputStream = file.getInputStream();
         XWPFDocument document = new XWPFDocument(inputStream);
 
-        // 准备 XHTML 选项 (设置 IURIResolver，把图片放到文件绝对路径下image/word/media文件夹
+        // 准备 XHTML 选项 (设置 IURIResolver，把图片放到文件绝对路径下image/word/media文件夹)
         File imageFolderFile = new File(tempPath);
         XHTMLOptions options = XHTMLOptions.create().URIResolver(new FileURIResolver(imageFolderFile));
         options.setExtractor(new FileImageExtractor(imageFolderFile));
@@ -54,16 +54,14 @@ public class Word2Html {
 
         // 文件转内容并把图片传到阿里云
         String htmlContent = this.getHtmlContent(htmlFile);
-        Map<String, String[]> map = uploadImage(tempPath + "/word/media");
+        Map<String, String[]> map = image.uploadImage(tempPath + "/word/media");
 
         inputStream.close();
         outputStream.close();
 
         // 删除目录
-        try {
-            this.deleteFile(htmlFileObj);
-            this.deleteFile(imageFolderFile);
-        } catch (Exception ex) {}
+        image.deleteFile(htmlFileObj);
+        image.deleteFile(imageFolderFile);
 
         return StringUtils.replaceEach(htmlContent, map.get("origin"), map.get("current"));
     }
@@ -109,82 +107,6 @@ public class Word2Html {
             sb.append(s);
         }
         bufferedReader.close();
-        return sb.toString();
-    }
-
-    /**
-     * 将生成的图片传到阿里云
-     *
-     * @param path 图片目录
-     * @return
-     * @throws IOException
-     */
-    public Map<String, String[]> uploadImage(String path) throws IOException {
-        List<String> origin = new ArrayList<>();
-        List<String> current = new ArrayList<>();
-
-        String newImage;
-        InputStream inputStream;
-        File file = new File(path);
-        if (file.exists()) {
-            File[] files = file.listFiles();
-            if (files != null && files.length != 0) {
-                for (File item : files) {
-                    if (item.isFile()) {
-                        inputStream = new FileInputStream(item);
-                        origin.add(item.getAbsolutePath());
-                        newImage = aliOSS.upload(inputStream, createUniqueStr() + item.getName());
-                        current.add(newImage);
-                        inputStream.close();
-                    }
-                }
-            }
-        }
-
-        Map<String, String[]> map = new HashMap<>();
-        String[] origins = origin.toArray(new String[origin.size()]);
-        String[] currents = current.toArray(new String[current.size()]);
-        map.put("origin", origins);
-        map.put("current", currents);
-        return map;
-    }
-
-    /**
-     * 删除文件或目录
-     *
-     * @param file
-     * @return
-     */
-    public boolean deleteFile(File file) {
-        if (!file.exists())
-            return false;
-
-        if (file.isFile()) {
-            return file.delete();
-        } else {
-            File[] files = file.listFiles();
-            if (files != null && files.length > 0) {
-                for (File fileItem : files) {
-                    deleteFile(fileItem);
-                }
-            }
-        }
-        return file.delete();
-    }
-
-    /**
-     * 产生指定长度的随机数字符串
-     *
-     * @return
-     */
-    public String createUniqueStr() {
-        StringBuffer sb = new StringBuffer();
-        sb.append(new SimpleDateFormat("yyMMddHHmmss").format(new Date()));
-
-        Random random = new Random();
-        for (int i = 0; i < 4; i++) {
-            sb.append(Integer.toString(random.nextInt(10)));
-        }
         return sb.toString();
     }
 }
